@@ -1,0 +1,769 @@
+# RAS Commander QGIS Plugin - Cursor Rules
+
+## Project Overview
+This is a QGIS Processing Provider plugin for accessing HEC-RAS model data through the `ras-commander` library. The plugin provides hydraulic modelers and GIS analysts with tools to load HEC-RAS geometry, results, and metadata directly into QGIS.
+
+## Critical QGIS Compatibility Updates (MUST READ)
+
+### QGIS Field Constructor Changes (3.38+)
+**IMPORTANT**: This project has been updated for QGIS 3.38+ compatibility. The deprecated `QVariant` field constructors have been replaced with modern `QMetaType.Type` constructors.
+
+**Always use:**
+```python
+from PyQt5.QtCore import QMetaType
+from qgis.core import QgsField
+
+# Correct (QGIS 3.38+)
+QgsField("field_name", QMetaType.Type.QString)
+QgsField("field_name", QMetaType.Type.Int)
+QgsField("field_name", QMetaType.Type.Double)
+QgsField("field_name", QMetaType.Type.Bool)
+```
+
+**Never use (deprecated):**
+```python
+# This will show deprecation warnings in QGIS 3.38+
+QgsField("field_name", QVariant.String)
+QgsField("field_name", QVariant.Int)
+```
+
+### QGIS Version Support Matrix
+- **QGIS 3.22-3.37**: Fully supported with backward compatibility
+- **QGIS 3.38+**: Uses updated `QMetaType.Type` field constructors (recommended)
+- **QGIS 3.42+**: Tested and verified
+- **Future QGIS 4.0**: Prepared with modern field constructor patterns
+
+## Essential Web References (Update Knowledge)
+
+### Primary Documentation
+- **QGIS PyQGIS Developer Cookbook**: https://docs.qgis.org/3.40/en/docs/pyqgis_developer_cookbook/vector.html
+  - Section 6: Using Vector Layers (field construction patterns)
+  - Updated field type mapping and best practices
+  - Modern QGIS API usage examples
+
+### Field Type Reference
+Use the QGIS documentation above for field type mappings:
+- Text/String → `QMetaType.Type.QString`
+- Integer → `QMetaType.Type.Int`
+- Float/Double → `QMetaType.Type.Double`
+- Boolean → `QMetaType.Type.Bool`
+- Date → `QMetaType.Type.QDate`
+- DateTime → `QMetaType.Type.QDateTime`
+
+## Code Style Guidelines
+
+### Naming Conventions (STRICTLY ENFORCED)
+- **Files**: `snake_case` (e.g., `alg_load_mesh_cells.py`, `helpers.py`)
+- **Classes**: `PascalCase` (e.g., `LoadMeshCellsAlgorithm`, `RASCommanderProvider`)
+- **Functions/Methods**: `snake_case` (e.g., `process_algorithm`, `gdf_to_qgis_layer`)
+- **Variables**: `snake_case` (e.g., `hdf_path`, `max_wse_gdf`)
+- **Constants**: `UPPER_CASE_WITH_UNDERSCORES` (e.g., `PROVIDER_NAME`)
+
+### Project Structure
+```
+ras_commander_qgis/
+├── __init__.py                  # Plugin entry point
+├── plugin_main.py               # Main plugin class
+├── metadata.txt                 # Plugin metadata
+├── icon.png                     # Plugin icon
+└── processing/
+    ├── __init__.py
+    ├── provider.py              # Processing provider
+    ├── helpers.py               # Utility functions (UPDATED for QMetaType)
+    ├── alg_load_project_summary.py
+    ├── alg_load_cross_sections.py
+    ├── alg_load_mesh_cells.py   # UPDATED for QMetaType
+    └── ... (other algorithm files)
+```
+
+## Critical Implementation Requirements
+
+### 1. The Feature Sink Pattern (STRICTLY ENFORCED)
+**ALL ALGORITHMS THAT CREATE A NEW VECTOR LAYER AS FINAL OUTPUT MUST USE THE FEATURE SINK PATTERN.**
+This is non-negotiable and prevents layer-loading failures.
+
+#### The Correct Pattern:
+
+**Step 1: In `initAlgorithm()` - Define output with `QgsProcessingParameterFeatureSink`:**
+```python
+from qgis.core import QgsProcessing, QgsProcessingParameterFeatureSink
+
+self.addParameter(
+    QgsProcessingParameterFeatureSink(
+        self.OUTPUT_LAYER,
+        'My Output Layer',
+        QgsProcessing.TypeVectorPolygon  # Use appropriate geometry type
+    )
+)
+```
+
+**Step 2: In `processAlgorithm()` - Use the Feature Sink pattern:**
+```python
+from qgis.core import (
+    QgsFields, QgsField, QgsFeature, QgsGeometry, 
+    QgsWkbTypes, QgsCoordinateReferenceSystem, QgsFeatureSink
+)
+from PyQt5.QtCore import QMetaType
+
+# Define fields using QMetaType
+fields = QgsFields()
+fields.append(QgsField("field_name", QMetaType.Type.QString))
+fields.append(QgsField("field_id", QMetaType.Type.Int))
+
+# Get the sink for the output parameter
+(sink, dest_id) = self.parameterAsSink(
+    parameters,
+    self.OUTPUT_LAYER,
+    context,
+    fields,
+    QgsWkbTypes.Polygon,  # Match the geometry type
+    QgsCoordinateReferenceSystem("EPSG:4326")
+)
+
+if sink is None:
+    raise QgsProcessingException(f"Could not create sink for output layer '{self.OUTPUT_LAYER}'.")
+
+# Loop through data, create features, and add them to the sink
+for i, data_row in enumerate(data):
+    if feedback.isCanceled():
+        break
+    
+    feature = QgsFeature()
+    feature.setFields(fields)
+    feature.setGeometry(QgsGeometry.fromWkt(data_row.geometry.wkt))
+    feature.setAttribute("field_name", str(data_row.name))
+    feature.setAttribute("field_id", int(data_row.id))
+    
+    sink.addFeature(feature, QgsFeatureSink.FastInsert)
+
+# Return the destination ID
+return {self.OUTPUT_LAYER: dest_id}
+```
+
+### 2. NEVER Manually Create QgsVectorLayer for Final Outputs
+**FORBIDDEN PATTERN** - Do not use this for final algorithm outputs:
+```python
+# This pattern is unstable and forbidden for final outputs
+layer = QgsVectorLayer("Polygon", "layer_name", "memory")
+# ... add features to layer ...
+QgsProject.instance().addMapLayer(layer)  # DON'T DO THIS
+```
+
+### 3. Field Creation with QMetaType (STRICTLY ENFORCED)
+When creating QGIS fields, always use `QMetaType.Type`:
+```python
+from PyQt5.QtCore import QMetaType
+from qgis.core import QgsField
+
+# Correct - Use QMetaType.Type
+QgsField("name", QMetaType.Type.QString)
+QgsField("count", QMetaType.Type.Int)
+QgsField("value", QMetaType.Type.Double)
+QgsField("flag", QMetaType.Type.Bool)
+
+# For helper functions, use the improved version
+from .helpers import _pandas_dtype_to_qgs_field_improved
+field = _pandas_dtype_to_qgs_field_improved(column_name, pandas_dtype)
+```
+
+### 4. Memory Layer Creation (Non-Output Layers Only)
+Use helper functions in `helpers.py` ONLY for intermediate/temporary layers, NOT final outputs:
+```python
+from .helpers import gdf_to_qgis_layer, df_to_qgis_table
+
+# For intermediate spatial data processing
+temp_layer = gdf_to_qgis_layer(geodataframe, "temp_layer_name")
+
+# For intermediate tabular data
+temp_table = df_to_qgis_table(dataframe, "temp_table_name")
+```
+
+### 5. Error Handling
+Always use `QgsProcessingException` for user-facing errors:
+```python
+from qgis.core import QgsProcessingException
+
+if condition_fails:
+    raise QgsProcessingException("Clear error message for user")
+```
+
+### 6. Progress Reporting
+Use the feedback object for long operations:
+```python
+total_features = len(data)
+for i, item in enumerate(data):
+    if feedback.isCanceled():
+        break
+    progress = int((i / total_features) * 100)
+    feedback.setProgress(progress)
+    feedback.pushInfo(f"Processing item {i+1} of {total_features}")
+```
+
+### 7. CRITICAL: Never Use pyproj Directly (PREVENTS FATAL CRASHES)
+**NEVER IMPORT OR USE pyproj DIRECTLY IN ANY ALGORITHM CODE.**
+
+This is a critical safety rule that prevents Windows fatal exceptions caused by version conflicts between QGIS's internal pyproj/PROJ and the user's Python environment.
+
+#### FORBIDDEN (Will Cause Crashes):
+```python
+# NEVER DO THIS - Direct pyproj usage
+from pyproj import CRS
+crs = CRS.from_wkt(proj_wkt)  # CRASHES with Windows fatal exception
+crs_name = crs.name  # CRASHES
+
+# NEVER DO THIS - Even for simple operations
+import pyproj
+proj = pyproj.Proj(proj_string)  # CRASHES
+```
+
+#### SAFE ALTERNATIVES:
+```python
+# For CRS operations, use QGIS's QgsCoordinateReferenceSystem
+qgis_crs = QgsCoordinateReferenceSystem()
+qgis_crs.createFromWkt(proj_wkt)  # Safe - uses QGIS's internal PROJ
+
+# For CRS name in feedback messages
+if proj_wkt:
+    feedback.pushInfo("CRS found in HEC-RAS project")  # Don't try to parse the name
+    # OR if you must show CRS info:
+    feedback.pushInfo(f"CRS: {qgis_crs.authid()}")  # Use QGIS's method
+```
+
+#### WHY THIS RULE EXISTS:
+- QGIS bundles its own pyproj/PROJ libraries with specific versions
+- The user's Python environment (with ras-commander) has different pyproj/PROJ versions
+- When these versions conflict, Windows throws an access violation (fatal exception)
+- This crash happens BEFORE any error handling can catch it
+
+#### SAFE CRS HANDLING PATTERN:
+```python
+# 1. Get WKT from ras-commander (safe - just returns a string)
+proj_wkt = HdfBase.get_projection(hdf_path)
+
+# 2. Create QGIS CRS object (safe - uses QGIS's internal PROJ)
+qgis_crs = QgsCoordinateReferenceSystem()
+qgis_crs.createFromWkt(proj_wkt)
+
+# 3. Use the QGIS CRS object for all operations
+sink = self.parameterAsSink(..., qgis_crs)
+```
+
+#### APPLIES TO ALL FILES:
+This rule applies to EVERY algorithm file in the plugin, especially:
+- All files in `processing/` directory
+- Any helper functions that work with CRS data
+- Even simple CRS name extraction for logging
+
+Remember: ANY direct use of pyproj will cause an immediate, unrecoverable crash!
+
+### 8. The Firewall Pattern for CRS Handling (CRITICAL - PREVENTS CRASHES)
+**ALL ALGORITHMS THAT CALL RAS-COMMANDER METHODS RETURNING GEODATAFRAMES MUST USE THE FIREWALL PATTERN.**
+This prevents fatal CRS handling conflicts between the user's Python environment and QGIS's internal environment.
+
+⚠️ **CRITICAL UPDATES**: 
+- **NEVER pass CRS to gpd.GeoDataFrame() constructor in QGIS environment!** This will cause Windows fatal exceptions. The CRS information should ONLY be used for QGIS sink creation.
+- **NEVER reference original GeoDataFrame after deconstruction!** This includes `initial_gdf.crs.name` - capture ALL needed values during deconstruction step.
+
+#### The Problem:
+When `ras-commander` returns a `GeoDataFrame` created in the user's Python environment (with its own `pyproj`/PROJ versions), passing this directly to QGIS causes Windows fatal exceptions due to CRS object incompatibility.
+
+#### The Solution - Corrected Firewall Pattern:
+**CRITICAL NOTE: Never assume private methods exist. Always use public API methods.**
+
+**Step 1: Call public ras-commander method to get initial GeoDataFrame**
+**Step 2: Extract raw components AND capture CRS name from this GeoDataFrame**  
+**Step 3: Reconstruct GeoDataFrame within QGIS environment**
+**Step 4: NEVER reference original GeoDataFrame after Step 2**
+
+#### Required Implementation - Improved Firewall Pattern:
+```python
+# Required imports at top of file
+import pandas as pd
+import geopandas as gpd  
+from shapely.wkt import loads
+
+def processAlgorithm(self, parameters, context, feedback):
+    hdf_path = self.parameterAsFile(parameters, self.INPUT_HDF, context)
+    override_crs = self.parameterAsCrs(parameters, self.OVERRIDE_CRS, context)
+
+    try:
+        # 1. Call ras-commander
+        from ras_commander import HdfXsec  # Use appropriate class
+        feedback.pushInfo(f"Loading data from {hdf_path}...")
+        initial_gdf = HdfXsec.get_cross_sections(hdf_path)
+        
+        if initial_gdf is None or initial_gdf.empty:
+            raise QgsProcessingException("No data found in the specified HDF file.")
+
+        # --- FIREWALL ---
+        # 2. Deconstruct into primitives - CAPTURE CRS NAME IMMEDIATELY
+        proj_wkt = initial_gdf.crs.to_wkt() if initial_gdf.crs else None
+        crs_name = initial_gdf.crs.name if initial_gdf.crs else None  # ← CRITICAL: Capture NOW
+        wkt_geometries = initial_gdf.geometry.to_wkt()
+        raw_df = pd.DataFrame(initial_gdf.drop(columns='geometry'))
+        # ⚠️ NEVER reference initial_gdf after this point!
+        
+    except QgsProcessingException as e:
+        raise e
+    except Exception as e:
+        raise QgsProcessingException(f"Failed during initial data load: {e}")
+
+    # Check for CRS and apply override if necessary
+    if proj_wkt:
+        feedback.pushInfo(f"CRS found in HEC-RAS project: {crs_name}")  # ← Use captured name
+    elif override_crs and override_crs.isValid():
+        proj_wkt = override_crs.toWkt()
+        feedback.pushInfo(f"Using user-defined override CRS: {override_crs.authid()}")
+    else:
+        raise QgsProcessingException(
+            "Coordinate Reference System (CRS) could not be determined. "
+            "Please define the CRS in your HEC-RAS model using RAS Mapper, "
+            "or provide a valid Override CRS in the tool dialog."
+        )
+
+    try:
+        # 3. Reconstruct the "Safe" GeoDataFrame
+        # CRITICAL: Do NOT pass crs to GeoDataFrame constructor to avoid pyproj conflicts
+        feedback.pushInfo("Reconstructing geometry within QGIS environment...")
+        geometry = [loads(wkt) for wkt in wkt_geometries]
+        gdf = gpd.GeoDataFrame(raw_df, geometry=geometry)  # No CRS passed here!
+        
+    except Exception as e:
+        raise QgsProcessingException(f"Failed during geometry reconstruction: {e}")
+
+    # 4. Proceed with the existing Feature Sink pattern using the new, safe `gdf`
+    qgis_crs = QgsCoordinateReferenceSystem()
+    qgis_crs.createFromWkt(proj_wkt)
+    
+    # Continue with Feature Sink pattern...
+```
+
+#### FORBIDDEN PATTERNS (Will Cause Crashes):
+```python
+# NEVER DO THIS - Direct use of ras-commander GeoDataFrames
+gdf = HdfBndry.get_breaklines(hdf_path)  # CRASHES on CRS conflicts
+gdf = HdfResults.get_max_wse(hdf_path)   # CRASHES on CRS conflicts
+
+# NEVER DO THIS - Assuming private methods exist
+raw_df = HdfXsec._get_cross_sections_df(hdf_path)  # Method may not exist
+
+# NEVER DO THIS - Referencing original GDF after deconstruction
+initial_gdf = HdfXsec.get_cross_sections(hdf_path)
+proj_wkt = initial_gdf.crs.to_wkt() if initial_gdf.crs else None
+# ... other deconstruction steps ...
+feedback.pushInfo(f"CRS: {initial_gdf.crs.name}")  # CRASHES! Don't reference after deconstruction
+```
+
+#### CRITICAL IMPLEMENTATION RULE:
+**ALWAYS use public API methods. NEVER assume private methods (starting with _) exist.**
+- Use `HdfXsec.get_cross_sections()` NOT `HdfXsec._get_cross_sections_df()`
+- Use `HdfBndry.get_breaklines()` NOT `HdfBndry._get_breaklines_df()`
+- Verify method exists in ras-commander documentation before using
+
+#### Methods that REQUIRE Firewall Pattern:
+- Any `ras_commander.HdfBndry.get_*()` method returning GeoDataFrames
+- Any `ras_commander.HdfResults.get_*()` method returning GeoDataFrames  
+- Any `ras_commander.HdfGeom.get_*()` method returning GeoDataFrames
+- Any `ras_commander.HdfXsec.get_*()` method returning GeoDataFrames
+
+#### Safe Methods (No Firewall Needed):
+- `HdfBase.get_projection()` - returns string
+- `HdfBase.get_*()` methods returning simple DataFrames or scalars
+- Any method returning basic Python types (strings, numbers, lists)
+
+### 9. CRS Override Pattern (MANDATORY FOR ALL SPATIAL ALGORITHMS)
+**ALL ALGORITHMS THAT CREATE SPATIAL VECTOR LAYERS MUST IMPLEMENT THE CRS OVERRIDE PATTERN.**
+This allows users to provide a CRS when HEC-RAS models lack proper coordinate system definition.
+
+#### The 4-Step Implementation Guide:
+
+**Step 1: Update Imports**
+Add `QgsProcessingParameterCrs` to the qgis.core import list:
+```python
+from qgis.core import (
+    QgsProcessingAlgorithm,
+    # ... other imports
+    QgsProcessingParameterCrs  # <--- ADD THIS
+)
+```
+
+**Step 2: Add Parameter Constant**
+In the class definition, add the constant:
+```python
+class MyAlgorithm(QgsProcessingAlgorithm):
+    INPUT_HDF = 'INPUT_HDF'
+    OVERRIDE_CRS = 'OVERRIDE_CRS'  # <--- ADD THIS
+    OUTPUT_LAYER = 'OUTPUT_LAYER'
+```
+
+**Step 3: Add CRS Parameter in initAlgorithm()**
+Place the parameter after input file and before output layer:
+```python
+def initAlgorithm(self, config=None):
+    self.addParameter(
+        QgsProcessingParameterFile(
+            self.INPUT_HDF,
+            # ... existing parameter definition
+        )
+    )
+    
+    # --- ADD THIS BLOCK ---
+    self.addParameter(
+        QgsProcessingParameterCrs(
+            self.OVERRIDE_CRS,
+            'Override CRS (Optional)',
+            optional=True
+        )
+    )
+    # ----------------------
+    
+    self.addParameter(
+        QgsProcessingParameterFeatureSink(
+            self.OUTPUT_LAYER,
+            # ... existing output definition
+        )
+    )
+```
+
+**Step 4: Update processAlgorithm() Logic**
+Replace the existing CRS handling with this robust pattern:
+
+**Step 4a: Get the parameter value**
+```python
+def processAlgorithm(self, parameters, context, feedback):
+    hdf_path = self.parameterAsFile(parameters, self.INPUT_HDF, context)
+    override_crs = self.parameterAsCrs(parameters, self.OVERRIDE_CRS, context)  # <--- ADD
+```
+
+**Step 4b: Implement the improved Firewall + CRS handling pattern**
+```python
+try:
+    # 1. Call ras-commander
+    from ras_commander import YourHdfClass
+    feedback.pushInfo(f"Loading data from {hdf_path}...")
+    initial_gdf = YourHdfClass.get_your_data(hdf_path)
+    
+    if initial_gdf is None or initial_gdf.empty:
+        raise QgsProcessingException("No data found in the specified HDF file.")
+
+    # --- FIREWALL ---
+    # 2. Deconstruct into primitives - CAPTURE CRS NAME IMMEDIATELY
+    proj_wkt = initial_gdf.crs.to_wkt() if initial_gdf.crs else None
+    crs_name = initial_gdf.crs.name if initial_gdf.crs else None  # ← CRITICAL: Capture NOW
+    wkt_geometries = initial_gdf.geometry.to_wkt()
+    raw_df = pd.DataFrame(initial_gdf.drop(columns='geometry'))
+    # ⚠️ NEVER reference initial_gdf after this point!
+    
+except QgsProcessingException as e:
+    raise e
+except Exception as e:
+    raise QgsProcessingException(f"Failed during initial data load: {e}")
+
+# Check for CRS and apply override if necessary
+if proj_wkt:
+    feedback.pushInfo(f"CRS found in HEC-RAS project: {crs_name}")  # ← Use captured name
+elif override_crs and override_crs.isValid():
+    proj_wkt = override_crs.toWkt()
+    feedback.pushInfo(f"Using user-defined override CRS: {override_crs.authid()}")
+else:
+    raise QgsProcessingException(
+        "Coordinate Reference System (CRS) could not be determined. "
+        "Please define the CRS in your HEC-RAS model using RAS Mapper, "
+        "or provide a valid Override CRS in the tool dialog."
+    )
+
+try:
+    # 3. Reconstruct the "Safe" GeoDataFrame
+    # CRITICAL: Do NOT pass crs to GeoDataFrame constructor to avoid pyproj conflicts
+    feedback.pushInfo("Reconstructing geometry within QGIS environment...")
+    geometry = [loads(wkt) for wkt in wkt_geometries]
+    gdf = gpd.GeoDataFrame(raw_df, geometry=geometry)  # No CRS passed here!
+    
+except Exception as e:
+    raise QgsProcessingException(f"Failed during geometry reconstruction: {e}")
+```
+
+**Step 4c: Use the determined CRS for the sink**
+```python
+# Create the QGIS CRS object from the determined WKT string
+qgis_crs = QgsCoordinateReferenceSystem()
+qgis_crs.createFromWkt(proj_wkt)
+
+# Pass this object to the sink
+(sink, dest_id) = self.parameterAsSink(
+    parameters,
+    self.OUTPUT_LAYER,
+    context,
+    fields,
+    QgsWkbTypes.LineString,  # Or Polygon, Point, etc.
+    qgis_crs  # <--- USE THE NEWLY CREATED QGIS CRS OBJECT
+)
+```
+
+#### CRS Priority Logic:
+1. **Trust ras-commander first**: Attempt to get CRS automatically from HDF file and project files
+2. **Use User Override as fallback**: If ras-commander cannot determine CRS, use user-provided CRS
+3. **Fail Gracefully**: If both fail, raise clear error message with instructions
+
+## Updated Files (Important Changes)
+
+### helpers.py
+- **UPDATED**: Uses `QMetaType.Type` instead of `QVariant`
+- **UPDATED**: `_pandas_dtype_to_qgs_field_improved()` function uses modern field types
+- **Import change**: `from PyQt5.QtCore import QMetaType` (not QVariant)
+
+### alg_load_mesh_cells.py
+- **UPDATED**: Field creation uses `QMetaType.Type.QString` and `QMetaType.Type.Int`
+- **Import change**: `from PyQt5.QtCore import QMetaType` (not QVariant)
+
+### alg_load_bank_lines.py
+- **UPDATED**: Implements CRS Override Pattern with enhanced error handling
+- **UPDATED**: Uses Feature Sink pattern and QMetaType field types
+- **NEW**: Robust CRS handling with user fallback option
+
+## Algorithm Development Pattern (UPDATED FOR FEATURE SINK + CRS OVERRIDE)
+
+Each algorithm file that creates vector layer outputs MUST follow this structure:
+```python
+# -*- coding: utf-8 -*-
+
+from qgis.core import (
+    QgsProcessingAlgorithm,
+    QgsProcessingParameterFile,
+    QgsProcessingParameterFeatureSink,
+    QgsProcessingParameterCrs,  # REQUIRED for spatial algorithms
+    QgsProcessing,
+    QgsProcessingException,
+    QgsFields,
+    QgsField,
+    QgsFeature,
+    QgsGeometry,
+    QgsWkbTypes,
+    QgsCoordinateReferenceSystem,
+    QgsFeatureSink
+)
+from PyQt5.QtCore import QMetaType  # IMPORTANT: Use QMetaType, not QVariant
+
+class MyAlgorithm(QgsProcessingAlgorithm):
+    """
+    Algorithm description for QGIS help panel.
+    """
+    INPUT_PARAM = 'INPUT_PARAM'
+    OVERRIDE_CRS = 'OVERRIDE_CRS'  # REQUIRED for spatial algorithms
+    OUTPUT_LAYER = 'OUTPUT_LAYER'
+    
+    def createInstance(self):
+        return MyAlgorithm()
+    
+    def name(self):
+        return 'algorithm_name'
+        
+    def displayName(self):
+        return 'Display Name'
+        
+    def group(self):
+        return 'Group Name'
+        
+    def initAlgorithm(self, config=None):
+        # Define input parameters
+        self.addParameter(
+            QgsProcessingParameterFile(
+                self.INPUT_PARAM,
+                'Input File',
+                behavior=QgsProcessingParameterFile.File
+            )
+        )
+        
+        # REQUIRED: CRS Override parameter for spatial algorithms
+        self.addParameter(
+            QgsProcessingParameterCrs(
+                self.OVERRIDE_CRS,
+                'Override CRS (Optional)',
+                optional=True
+            )
+        )
+        
+        # REQUIRED: Define output as FeatureSink
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_LAYER,
+                'Output Layer',
+                QgsProcessing.TypeVectorPolygon  # Use appropriate type
+            )
+        )
+        
+    def processAlgorithm(self, parameters, context, feedback):
+        # Get input parameters
+        input_path = self.parameterAsFile(parameters, self.INPUT_PARAM, context)
+        override_crs = self.parameterAsCrs(parameters, self.OVERRIDE_CRS, context)
+        
+        # REQUIRED: Use Enhanced CRS Handling + Feature Sink pattern
+        try:
+            # 1. Call ras-commander
+            initial_gdf = get_data_from_ras_commander(input_path)
+            if initial_gdf is None or initial_gdf.empty:
+                raise QgsProcessingException("No data found in the specified HDF file.")
+
+            # --- FIREWALL ---
+            # 2. Deconstruct into primitives - CAPTURE CRS NAME IMMEDIATELY
+            proj_wkt = initial_gdf.crs.to_wkt() if initial_gdf.crs else None
+            crs_name = initial_gdf.crs.name if initial_gdf.crs else None  # ← CRITICAL: Capture NOW
+            wkt_geometries = initial_gdf.geometry.to_wkt()
+            raw_df = pd.DataFrame(initial_gdf.drop(columns='geometry'))
+            # ⚠️ NEVER reference initial_gdf after this point!
+            
+        except QgsProcessingException as e:
+            raise e
+        except Exception as e:
+            raise QgsProcessingException(f"Failed during initial data load: {e}")
+
+        # Check for CRS and apply override if necessary
+        if proj_wkt:
+            feedback.pushInfo(f"CRS found: {crs_name}")  # ← Use captured name
+        elif override_crs and override_crs.isValid():
+            proj_wkt = override_crs.toWkt()
+            feedback.pushInfo(f"Using override CRS: {override_crs.authid()}")
+        else:
+            raise QgsProcessingException(
+                "CRS could not be determined. Please define CRS in HEC-RAS model "
+                "or provide an Override CRS."
+            )
+
+        try:
+            # 3. Reconstruct the "Safe" GeoDataFrame
+            # CRITICAL: Do NOT pass crs to GeoDataFrame constructor to avoid pyproj conflicts
+            feedback.pushInfo("Reconstructing geometry within QGIS environment...")
+            geometry = [loads(wkt) for wkt in wkt_geometries]
+            gdf = gpd.GeoDataFrame(raw_df, geometry=geometry)  # No CRS passed here!
+            
+        except Exception as e:
+            raise QgsProcessingException(f"Failed during geometry reconstruction: {e}")
+        
+        # Create QGIS CRS and sink
+        qgis_crs = QgsCoordinateReferenceSystem()
+        qgis_crs.createFromWkt(proj_wkt)
+        
+        fields = QgsFields()
+        fields.append(QgsField("name", QMetaType.Type.QString))
+        
+        (sink, dest_id) = self.parameterAsSink(
+            parameters,
+            self.OUTPUT_LAYER,
+            context,
+            fields,
+            QgsWkbTypes.Polygon,
+            qgis_crs
+        )
+        
+        # Process and add features...
+        
+        # REQUIRED: Return destination ID
+        return {self.OUTPUT_LAYER: dest_id}
+```
+
+## Dependencies and Compatibility
+
+### Required Dependencies
+- **QGIS**: 3.22+ minimum, 3.38+ recommended
+- **ras-commander**: Latest version from PyPI
+- **Python packages**: pandas, geopandas (included with QGIS)
+
+### Installation Notes
+- Use `--no-deps` flag when installing ras-commander in OSGeo4W to avoid h5py conflicts
+- Plugin uses modern QGIS APIs compatible with current and future QGIS versions
+
+## Testing and Validation
+
+### Before Committing
+1. Verify no `QVariant` imports or usage remain in code
+2. Check all field creation uses `QMetaType.Type`
+3. Test with QGIS 3.38+ for deprecation warnings
+4. Validate algorithm functionality with sample HDF files
+5. **Test CRS override functionality with models lacking CRS definition**
+
+### Algorithm Categories
+1. **Project & Plan Metadata**: Load project summary, parameters, statistics
+2. **1D Geometry Layers**: Cross-sections, centerlines, bank lines, structures
+3. **2D Geometry Layers**: Mesh areas, cells, breaklines, boundary conditions
+4. **Pipe Network Geometry**: Conduits and nodes
+5. **Vector Results Layers**: Water surface points, iteration counts
+6. **Analysis Algorithms**: Fluvial-pluvial boundary delineation
+
+## Documentation Requirements
+
+### Code Documentation
+- Module-level docstrings explaining purpose
+- Class-level docstrings for QGIS help panel
+- Google-style docstrings for functions
+- Type hints for all functions
+
+### User Documentation
+- Reference modern QGIS field types in all examples
+- Include compatibility matrix in README
+- Link to QGIS PyQGIS Developer Cookbook for technical details
+- **Document CRS override functionality for users with undefined coordinate systems**
+
+## Web References for Current Development
+
+When implementing QGIS functionality, always reference:
+1. **QGIS 3.40 PyQGIS Cookbook**: https://docs.qgis.org/3.40/en/docs/pyqgis_developer_cookbook/
+2. **Vector Layer Section**: https://docs.qgis.org/3.40/en/docs/pyqgis_developer_cookbook/vector.html
+3. **Processing Framework**: https://docs.qgis.org/3.40/en/docs/user_manual/processing/index.html
+
+These references contain the most current API patterns and should be used to validate any QGIS-related code changes.
+
+## Important Notes
+
+- This project represents a migration from deprecated QGIS APIs to modern ones
+- All field creation patterns have been updated for future compatibility
+- The plugin maintains backward compatibility while using forward-compatible APIs
+- Always test with the latest stable QGIS version to ensure compatibility
+- **CRS Override functionality is mandatory for all spatial algorithms to handle models without defined coordinate systems**
+
+## Debugging and Revisions: Next Steps Action Plan
+
+With the Feature Sink pattern and CRS Override functionality now established as foundations, the path forward is clear:
+
+### 1. Apply Installation Fixes
+Update the `README.md` file with new, detailed installation instructions that prevent common h5py and dependency conflicts.
+
+### 2. Update Development Guidelines
+- ✅ **COMPLETED**: Updated `.cursorrules` with strict Feature Sink pattern requirements
+- ✅ **COMPLETED**: Added mandatory CRS Override pattern for all spatial algorithms
+- Update `ras-commander-qgis specification.md` to include both mandatory patterns
+
+### 3. Refactor Algorithms Systematically
+Go through each algorithm file (`alg_*.py`) that creates a vector layer and refactor it to use both the Feature Sink pattern AND the CRS Override pattern established.
+
+**Priority Order for Refactoring:**
+1. `alg_load_cross_sections.py` - 1D geometry layer
+2. `alg_load_mesh_areas.py` - 2D geometry layer  
+3. `alg_load_centerlines.py` - 1D geometry layer
+4. ✅ **COMPLETED**: `alg_load_bank_lines.py` - 1D geometry layer  
+5. All remaining `alg_*.py` files that create vector outputs
+
+**For Each Algorithm File:**
+- Replace `QgsProcessingOutputVectorLayer` with `QgsProcessingParameterFeatureSink`
+- Add `QgsProcessingParameterCrs` import and parameter
+- Update imports to include Feature Sink classes
+- Implement the Feature Sink pattern
+- **Implement the 4-step CRS Override pattern**
+- Replace any `QVariant` usage with `QMetaType.Type`
+- Test with sample HDF files to verify functionality
+
+### 4. Enhanced Validation Checklist
+Before considering any spatial algorithm "complete":
+- [ ] Uses `QgsProcessingParameterFeatureSink` for output definition
+- [ ] Uses `parameterAsSink()` to get the sink
+- [ ] Creates features and adds them with `sink.addFeature()`
+- [ ] Returns `{OUTPUT_PARAMETER: dest_id}`
+- [ ] Uses `QMetaType.Type` for all field definitions
+- [ ] No `QgsVectorLayer` creation for final outputs
+- [ ] **Uses Firewall Pattern for all ras-commander GeoDataFrame methods**
+- [ ] **Implements 4-step CRS Override Pattern**
+- [ ] **Includes `QgsProcessingParameterCrs` parameter**
+- [ ] **Has enhanced CRS handling logic (auto-detect → user override → graceful failure)**
+- [ ] Proper error handling with `QgsProcessingException`
+- [ ] Progress reporting with `feedback.setProgress()`
+
+This foundational work ensures that all algorithms are robust, user-friendly, and handle the common issue of HEC-RAS models lacking proper coordinate system definition.

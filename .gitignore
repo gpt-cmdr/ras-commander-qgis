@@ -1,0 +1,34 @@
+# Claude AI assistant files
+.claude/
+
+# ras_commander library folder
+ras_commander/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# QGIS plugin build artifacts
+*.zip
+build/
+dist/

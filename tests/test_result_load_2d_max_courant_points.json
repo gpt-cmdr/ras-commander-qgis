@@ -1,0 +1,6 @@
+{
+  "algorithm": "load_2d_max_courant_points",
+  "status": "failed",
+  "error": "Test files not found",
+  "output": null
+}

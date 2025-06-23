@@ -1,0 +1,41 @@
+# This file contains metadata for your plugin.
+
+[general]
+name=RAS Commander
+qgisMinimumVersion=3.22
+description=Access HEC-RAS model data through the ras-commander library
+version=1.0.0
+author=RAS Commander Development Team
+email=
+
+about=This plugin provides a QGIS Processing Provider for accessing HEC-RAS model data including geometry, results, and project metadata. It leverages the ras-commander Python library to read HDF files and load them as native QGIS vector layers.
+
+tracker=https://github.com/your-org/ras-commander-qgis/issues
+repository=https://github.com/your-org/ras-commander-qgis
+# End of mandatory metadata
+
+# Recommended items:
+hasProcessingProvider=yes
+changelog=
+    1.0.0 - Initial release
+    - Load HEC-RAS project metadata
+    - Load 1D and 2D geometry layers
+    - Load results as vector point layers
+    - Fluvial-pluvial boundary analysis
+
+# Tags are comma separated with spaces allowed
+tags=hydraulic modeling, HEC-RAS, hydrology, water resources
+
+homepage=https://github.com/your-org/ras-commander-qgis
+category=Plugins
+icon=icon.png
+# experimental flag
+experimental=True
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
+# Since QGIS 3.8, a comma separated list of plugins to be installed
+# (or upgraded) can be specified.
+# Check the documentation for more information.
+# plugin_dependencies= 
