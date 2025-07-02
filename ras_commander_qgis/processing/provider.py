@@ -84,22 +84,14 @@ class RASCommanderProvider(QgsProcessingProvider):
             ('alg_load_runtime_statistics', 'LoadRuntimeStatisticsAlgorithm'),
             ('alg_load_volume_accounting', 'LoadVolumeAccountingAlgorithm'),
             
-            # 1D Geometry Layers
-            ('alg_load_1d_cross_sections', 'Load1DCrossSectionsAlgorithm'),
-            ('alg_load_1d_river_centerlines', 'Load1DRiverCenterlinesAlgorithm'),
-            ('alg_load_1d_bank_lines', 'Load1DBankLinesAlgorithm'),
-            ('alg_load_1d_hydraulic_structures', 'Load1DHydraulicStructuresAlgorithm'),
+            # 1D Geometry Layers (consolidated)
+            ('alg_load_1d_geometry', 'Load1DGeometryAlgorithm'),
             
             # 1D Summary Results
             ('alg_load_1d_xsec_results', 'Load1DCrossSectionResultsAlgorithm'),
             
-            # 2D Geometry Layers
-            ('alg_load_2d_mesh_area_perimeters', 'Load2DMeshAreaPerimetersAlgorithm'),
-            ('alg_load_2d_mesh_cells', 'Load2DMeshCellsAlgorithm'),
-            ('alg_load_2d_mesh_cell_faces', 'Load2DMeshCellFacesAlgorithm'),
-            ('alg_load_2d_mesh_cell_points', 'Load2DMeshCellPointsAlgorithm'),
-            ('alg_load_2d_breaklines', 'Load2DBreaklinesAlgorithm'),
-            ('alg_load_2d_bc_lines', 'Load2DBoundaryConditionLinesAlgorithm'),
+            # 2D Geometry Layers (consolidated)
+            ('alg_load_2d_geometry', 'Load2DGeometryAlgorithm'),
             
             # Pipe Network Geometry
             ('alg_load_pipe_conduits', 'LoadPipeConduitsAlgorithm'),
