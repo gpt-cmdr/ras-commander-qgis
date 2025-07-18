@@ -3,7 +3,7 @@
 A QGIS Processing Provider for accessing HEC-RAS model data through the `ras-commander` library.
 
 <div align="center">
-  <img src="Images/ras-commander-qgis-logo.svg" alt="RAS Commander Arc Hydro Tools" width="600">
+  <img src="Images/ras-commander-qgis-logo.svg" alt="RAS Commander QGIS Plugins" width="600">
 
 ## Overview
 
