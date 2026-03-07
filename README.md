@@ -5,6 +5,14 @@ A QGIS Processing Provider for accessing HEC-RAS model data through the `ras-com
 <div align="center">
   <img src="ras-commander-qgis-logo.svg" alt="RAS Commander QGIS Plugins" width="600"></div>  
 
+---
+
+**An open-source project of [CLB Engineering Corporation](https://clbengineering.com/)** — creators of the [ras-commander](https://github.com/gpt-cmdr/ras-commander) library.
+Built using the [LLM Forward](https://clbengineering.com/llm-forward) engineering approach.
+Contact: [info@clbengineering.com](mailto:info@clbengineering.com)
+
+---
+
 ## Overview
 
 The RAS Commander QGIS Plugin provides hydraulic modelers and GIS analysts with a seamless interface within QGIS for accessing, analyzing, and visualizing HEC-RAS model data. The plugin leverages the existing `ras-commander` Python library as its core engine and implements a modern QGIS Processing Provider architecture.
