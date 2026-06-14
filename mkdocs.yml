@@ -1,0 +1,43 @@
+site_name: RAS Commander QGIS
+site_url: https://rascommander.info/qgis/
+site_description: A QGIS plugin surfacing ras-commander HEC-RAS tooling inside the QGIS GUI.
+repo_url: https://github.com/gpt-cmdr/ras-commander-qgis
+repo_name: gpt-cmdr/ras-commander-qgis
+docs_dir: docs
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle: {icon: material/brightness-7, name: Switch to dark mode}
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle: {icon: material/brightness-4, name: Switch to light mode}
+  features:
+    - navigation.top
+    - navigation.sections
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/clb-branding.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Features: features.md
