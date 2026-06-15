@@ -885,3 +885,13 @@ After implementation:
 4. Test with large models to ensure performance is acceptable
 5. Verify layer grouping works correctly
 6. Test cancellation during long operations
+## Documentation Site
+
+Docs publish to **https://rascommander.info/qgis** on every push to `main` (self-hosted; build infra
+in `CLB-Engineering-Corporation/ras-commander-docs`). A broken `mkdocs.yml` fails the live build.
+
+- This is a **tool** exposing a focused subset of the ras-commander library. The cohesion hub injects
+  a "limited subset — for the full library, use ras-commander" banner from the shared theme; keep that
+  framing and point users to **https://rascommander.info/ras** for the full library.
+- Mechanics-forward authoring voice: defer methodology, parameter appropriateness, and
+  regulatory/standard-of-care questions to HEC's manuals and the reader's regional/agency references.
