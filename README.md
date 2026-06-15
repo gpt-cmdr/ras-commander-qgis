@@ -1,5 +1,7 @@
 # RAS Commander QGIS Plugin
 
+> 📖 **Documentation:** [rascommander.info/qgis](https://rascommander.info/qgis/) · full library docs at [rascommander.info/ras](https://rascommander.info/ras/)
+
 A QGIS Processing Provider for accessing HEC-RAS model data through the `ras-commander` library.
 
 <div align="center">
